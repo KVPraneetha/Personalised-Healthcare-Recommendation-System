@@ -1,0 +1,6 @@
+.ipynb_checkpoints/
+anaconda_projects/
+*.pkl
+*.db
+venv/
+.DS_Store

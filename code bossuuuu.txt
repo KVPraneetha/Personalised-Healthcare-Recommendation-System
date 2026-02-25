@@ -1,0 +1,218 @@
+import os
+os.getcwd()
+import shutil
+
+# Current notebook name
+notebook_name = 'health_disease_prediction.ipynb'
+
+# Target folder
+target_path = r'C:\Users\PRANEETHA\OneDrive\Desktop\personalised_healthcare_recommendation_system'
+
+shutil.move(notebook_name, target_path)
+print("Notebook moved successfully!")
+import os
+
+# Set working directory to your AI project folder
+os.chdir(r'C:\Users\PRANEETHA\OneDrive\Desktop\personalised_healthcare_recommendation_system')
+
+# Check current directory
+print("Current working directory:", os.getcwd())
+import pandas as pd
+
+# Load Excel file
+df_symptoms = pd.read_excel('health_symptoms_dataset.xlsx')
+
+# Check the first few rows
+df_symptoms.head()
+# Check the number of rows and columns
+print("Dataset shape:", df_symptoms.shape)
+
+# Column names
+print("Columns:", df_symptoms.columns)
+
+# Check for missing values
+print("Missing values in each column:\n", df_symptoms.isnull().sum())
+# Features (X) → all columns except 'Disease'
+X = df_symptoms.drop('Disease', axis=1)
+
+# Target (y) → the disease column
+y = df_symptoms['Disease']
+
+# Check the first few rows
+print(X.head())
+print(y.head())
+from sklearn.model_selection import train_test_split
+
+# 80% training, 20% testing
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Check shapes
+print("Training data shape:", X_train.shape)
+print("Test data shape:", X_test.shape)
+from sklearn.ensemble import RandomForestClassifier
+
+model = RandomForestClassifier(
+    n_estimators=300,
+    random_state=42,
+    class_weight="balanced"
+)
+
+model.fit(X_train, y_train)
+
+# Evaluate accuracy
+y_pred = model.predict(X_test)
+from sklearn.metrics import accuracy_score
+print("Test Accuracy:", accuracy_score(y_test, y_pred))# Accuracy on training set
+y_train_pred = model.predict(X_train)
+train_accuracy = accuracy_score(y_train, y_train_pred)
+print("Training Accuracy:", train_accuracy)
+
+# Accuracy on test set
+test_accuracy = accuracy_score(y_test, y_pred)
+print("Test Accuracy:", test_accuracy)
+# Recommendations dictionary 
+recommendations = {
+    'VIRAL FEVER': {
+        'Doctor': 'General Physician',
+        'Tests': 'CBC (Complete Blood Count), Temperature check',
+        'Urgency': 'If fever persists for more than 3 days or chills/sweating are severe, see doctor immediately'
+    },
+    'DENGUE': {
+        'Doctor': 'General Physician / Infectious Disease Specialist',
+        'Tests': 'CBC (platelet count), Dengue NS1 antigen test',
+        'Urgency': 'High urgency! See doctor immediately if you have high fever, severe headache, joint pain, or rash'
+    },
+    'GASTRITIS': {
+        'Doctor': 'Gastroenterologist',
+        'Tests': 'Endoscopy (if chronic), Blood test for H. pylori, Ultrasound (if needed)',
+        'Urgency': 'See doctor if upper abdominal pain, acidity, nausea, or vomiting persist'
+    },
+    'DIABETES': {
+        'Doctor': 'Endocrinologist',
+        'Tests': 'Fasting Blood Sugar, HbA1c, Urine test',
+        'Urgency': 'Schedule a check-up soon if you have excessive thirst, frequent urination, fatigue, or weakness'
+    },
+    'MALARIA': {
+        'Doctor': 'General Physician / Infectious Disease Specialist',
+        'Tests': 'Peripheral blood smear, Rapid diagnostic test (RDT)',
+        'Urgency': 'High urgency! See doctor immediately if you have high fever, chills, sweating, or fatigue'
+    }
+}# Predict disease function 
+def predict_disease(patient_symptoms):
+    """
+    patient_symptoms: dict with symptom column names as keys and 1/0 as values
+    Returns: dictionary with predicted disease, reasoning, doctor, tests, recommendation
+    """
+    import pandas as pd
+
+    # Convert input dictionary to DataFrame
+    input_df = pd.DataFrame([patient_symptoms])
+
+    # Predict disease using trained Decision Tree model
+    disease = model.predict(input_df)[0]
+
+    # Reasoning: list all symptoms that are present (value = 1)
+    present_symptoms = [sym for sym, val in patient_symptoms.items() if val == 1]
+    reasoning = f"The disease is predicted because you have these symptoms: {', '.join(present_symptoms)}"
+
+    # Get recommendation from dictionary
+    rec = recommendations.get(disease.strip().upper(), {
+        'Doctor': 'N/A',
+        'Tests': 'N/A',
+        'Urgency': 'N/A'
+    })
+        # Prepare output
+    output = {
+        'Predicted Disease': disease,
+        'Reasoning': reasoning,
+        'Doctor': rec['Doctor'],
+        'Tests': rec['Tests'],
+        'Recommendation': rec['Urgency']  # renamed for frontend
+    }
+    return output
+#dry run to check if code is working properly or not. this is just a test case .
+new_patient = {
+    'Fever': 1,
+    'High_Fever': 0,
+    'Chills_Sweating': 1,
+    'Mild_Headache': 0,
+    'Severe_Headache': 1,
+    'Joint_Pain': 1,
+    'Eye_Pain': 0,
+    'Cold_Runny_Nose': 0,
+    'Sore_Throat': 0,
+    'Cough': 0,
+    'Upper_Abdominal_Pain': 0,
+    'Acidity': 0,
+    'Nausea': 0,
+    'Vomiting': 0,
+    'Fatigue': 1,
+    'Weakness': 1,
+    'Light_Sensitivity': 0,
+    'Frequent_Urination': 0,
+    
+    'Excessive_Thirst': 0
+}
+
+result = predict_disease(new_patient)
+print(result)
+# --- New function: Predict Top 3 Diseases with Probabilities ---
+def predict_disease_top3(patient_symptoms):
+    """
+    patient_symptoms: dict with symptom column names as keys and 1/0 as values
+    Returns: dictionary with top 3 predicted diseases, reasoning, doctor, tests, recommendation
+    """
+    import pandas as pd
+
+    # Convert input dictionary to DataFrame
+    input_df = pd.DataFrame([patient_symptoms])
+
+    # Predict probabilities for all diseases
+    probs = model.predict_proba(input_df)[0]  # shape = (num_classes,)
+    classes = model.classes_
+
+    # Pair each disease with its probability
+    disease_probs = list(zip(classes, probs))
+
+    # Sort by probability descending and take top 3
+    top3 = sorted(disease_probs, key=lambda x: x[1], reverse=True)[:3]
+
+    # Format top 3 as percentage
+    top3_formatted = {d: f"{p*100:.1f}%" for d, p in top3}
+
+    # Reasoning: list all symptoms that are present (value = 1)
+    present_symptoms = [sym for sym, val in patient_symptoms.items() if val == 1]
+    reasoning = f"The prediction is based on these symptoms: {', '.join(present_symptoms)}"
+
+    # Use the highest probability disease for recommendation
+    main_disease = top3[0][0]
+    rec = recommendations.get(main_disease.strip().upper(), {
+    'Doctor': 'N/A',
+    'Tests': 'N/A',
+    'Urgency': 'N/A'
+})
+
+    # Prepare output
+    output = {
+        'Top 3 Diseases': top3_formatted,
+        'Reasoning': reasoning,
+        'Doctor': rec['Doctor'],
+        'Tests': rec['Tests'],
+        'Recommendation': rec['Urgency']  # shown as recommendation in frontend
+    }
+
+    return output
+# Test input for the new top-3 function (you can reuse new_patient)
+result_top3 = predict_disease_top3(new_patient)
+print(result_top3)
+import joblib
+
+# Save the trained model to the project folder
+joblib.dump(model, 'random_forest_model.pkl')
+print("Model saved as random_forest_model.pkl")
+
+# Optional: check the columns (without Streamlit)
+import pandas as pd
+df_symptoms = pd.read_excel('health_symptoms_dataset.xlsx')
+X_columns = df_symptoms.drop('Disease', axis=1).columns.tolist()
+print("Symptom columns:", X_columns)
